@@ -446,49 +446,80 @@ function drawImageWithMotion(ctx, img, motion, progress, cw, ch) {
 
 function drawCaption(ctx, text, cw, ch, scale, style, position) {
   const fontSize = Math.round(60 * scale);
+  const lineHeight = fontSize * 1.3;
   ctx.font = `700 ${fontSize}px "Noto Sans JP", sans-serif`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
-  // Calculate position
-  let y;
+  // Calculate wrapped lines
+  const maxWidth = cw * 0.9;
+  const lines = getLines(ctx, text, maxWidth);
+  const totalHeight = lines.length * lineHeight;
+
+  // Calculate base y position
+  let baseY;
   const padding = Math.round(20 * scale);
   switch (position) {
     case 'top':
-      y = ch * 0.12;
+      baseY = ch * 0.12;
       break;
     case 'center':
-      y = ch * 0.5;
+      baseY = ch * 0.5;
       break;
     case 'bottom':
     default:
-      y = ch * 0.82;
+      baseY = ch * 0.82;
   }
 
   const x = cw / 2;
-  const metrics = ctx.measureText(text);
-  const textW = metrics.width;
-  const textH = fontSize * 1.3;
+  
+  // Calculate vertical offset to center the block of lines around baseY
+  const startY = baseY - (totalHeight / 2) + (lineHeight / 2);
 
   switch (style) {
     case 'bg-box':
-      // Background box
+      // Find max width among all lines for the background box
+      let maxLineW = 0;
+      lines.forEach(line => {
+        const w = ctx.measureText(line).width;
+        if (w > maxLineW) maxLineW = w;
+      });
+
+      // Draw a single background box that covers all lines
       ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
       const boxRadius = Math.round(10 * scale);
-      roundRect(ctx, x - textW / 2 - padding, y - textH / 2, textW + padding * 2, textH, boxRadius);
+      roundRect(
+        ctx, 
+        x - maxLineW / 2 - padding, 
+        baseY - totalHeight / 2 - (padding / 2), 
+        maxLineW + padding * 2, 
+        totalHeight + padding, 
+        boxRadius
+      );
       ctx.fill();
+
+      // Draw each line
       ctx.fillStyle = '#ffffff';
-      ctx.fillText(text, x, y);
+      lines.forEach((line, i) => {
+        ctx.fillText(line, x, startY + (i * lineHeight));
+      });
       break;
+
     case 'outline':
       // White text with black outline
       ctx.strokeStyle = '#000000';
       ctx.lineWidth = Math.round(6 * scale);
       ctx.lineJoin = 'round';
-      ctx.strokeText(text, x, y);
+      lines.forEach((line, i) => {
+        ctx.strokeText(line, x, startY + (i * lineHeight));
+      });
+
       ctx.fillStyle = '#ffffff';
-      ctx.fillText(text, x, y);
+      lines.forEach((line, i) => {
+        ctx.fillText(line, x, startY + (i * lineHeight));
+      });
       break;
+
     case 'bold-shadow':
     default:
       // Bold with shadow
@@ -497,10 +528,35 @@ function drawCaption(ctx, text, cw, ch, scale, style, position) {
       ctx.shadowOffsetX = Math.round(2 * scale);
       ctx.shadowOffsetY = Math.round(2 * scale);
       ctx.fillStyle = '#ffffff';
-      ctx.fillText(text, x, y);
+      lines.forEach((line, i) => {
+        ctx.fillText(line, x, startY + (i * lineHeight));
+      });
       ctx.shadowColor = 'transparent';
       break;
   }
+}
+
+/**
+ * Text wrapping helper
+ */
+function getLines(ctx, text, maxWidth) {
+  if (!text) return [];
+  const words = text.split(''); // For Japanese, split per character
+  const lines = [];
+  let currentLine = words[0];
+
+  for (let i = 1; i < words.length; i++) {
+    const word = words[i];
+    const width = ctx.measureText(currentLine + word).width;
+    if (width < maxWidth) {
+      currentLine += word;
+    } else {
+      lines.push(currentLine);
+      currentLine = word;
+    }
+  }
+  lines.push(currentLine);
+  return lines;
 }
 
 function roundRect(ctx, x, y, w, h, r) {
@@ -1234,7 +1290,7 @@ async function handleAudioFile(file) {
 
 function handleDetectSilence() {
   if (!state.originalAudioBuffer) {
-    showToast('先に音声ファイルをアップロードしてください', 'error');
+    showToast('先に音声ファイルをアップロードしてください', 'info');
     return;
   }
 
@@ -1337,7 +1393,7 @@ function audioBufferToWav(buffer) {
 function handleSplitScript() {
   const text = document.getElementById('script-input').value.trim();
   if (!text) {
-    showToast('スクリプトを入力してください', 'error');
+    showToast('スクリプトを入力してください', 'info');
     return;
   }
 
