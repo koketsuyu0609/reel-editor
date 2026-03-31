@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>リール動画エディタ</title>
+  <meta name="description" content="スクリプトと画像からInstagramリール動画を自動生成するブラウザツール">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <!-- Header -->
+    <header class="app-header">
+      <h1 class="logo">🎬 リール動画エディタ</h1>
+      <p class="tagline">スクリプト → テロップ → 動画を自動生成</p>
+    </header>
+
+    <!-- Step Navigation -->
+    <nav class="steps-nav" id="steps-nav">
+      <div class="step-item active" data-step="1">
+        <div class="step-circle">1</div>
+        <span class="step-label">音声＆テキスト</span>
+      </div>
+      <div class="step-connector"></div>
+      <div class="step-item" data-step="2">
+        <div class="step-circle">2</div>
+        <span class="step-label">テロップ編集</span>
+      </div>
+      <div class="step-connector"></div>
+      <div class="step-item" data-step="3">
+        <div class="step-circle">3</div>
+        <span class="step-label">画像＆モーション</span>
+      </div>
+      <div class="step-connector"></div>
+      <div class="step-item" data-step="4">
+        <div class="step-circle">4</div>
+        <span class="step-label">プレビュー＆出力</span>
+      </div>
+    </nav>
+
+    <!-- Step Content -->
+    <main class="step-content">
+      <!-- Step 1: Audio & Script -->
+      <section class="step-panel active" id="step-1">
+        <div class="panel-grid">
+          <!-- Audio Upload -->
+          <div class="card">
+            <div class="card-header">
+              <h2>🎤 音声ファイル</h2>
+              <div class="header-actions">
+                <span class="badge" id="audio-status">未アップロード</span>
+                <button class="btn btn-small btn-secondary" id="change-audio-btn" style="display:none">変更</button>
+              </div>
+            </div>
+            <div class="drop-zone" id="audio-drop">
+              <input type="file" id="audio-input" accept="audio/*" hidden>
+              <div class="drop-icon">🎵</div>
+              <p class="drop-text">音声ファイルをここにドロップ</p>
+              <p class="drop-hint">またはクリックして選択（mp3, wav, m4a）</p>
+            </div>
+
+            <div class="audio-controls" id="audio-controls" style="display:none">
+              <div class="audio-player">
+                <audio id="audio-element" controls></audio>
+              </div>
+              <canvas id="waveform-canvas" width="800" height="120"></canvas>
+              <div class="silence-settings">
+                <div class="setting-row">
+                  <label for="silence-threshold">無音の感度</label>
+                  <input type="range" id="silence-threshold" min="0.005" max="0.08" step="0.005" value="0.02">
+                  <span id="threshold-value">0.02</span>
+                </div>
+                <div class="setting-row">
+                  <label for="silence-min-duration">最小無音長さ (秒)</label>
+                  <input type="range" id="silence-min-duration" min="0.1" max="1.5" step="0.1" value="0.3">
+                  <span id="duration-value">0.3s</span>
+                </div>
+                <div class="silence-info">
+                  <span id="silence-count">検出: 0区間</span>
+                  <span id="silence-total">合計: 0.0s</span>
+                </div>
+                <button class="btn btn-secondary" id="detect-silence-btn">無音を自動検出</button>
+                <div class="audio-edit-actions">
+                  <button class="btn btn-accent" id="remove-silence-btn" style="display:none">無音をカット</button>
+                  <button class="btn btn-danger" id="cut-selection-btn" style="display:none">選択範囲をカット</button>
+                  <button class="btn btn-secondary" id="reset-audio-btn" style="display:none">元に戻す</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Script Input -->
+          <div class="card">
+            <div class="card-header">
+              <h2>📝 スクリプト</h2>
+            </div>
+            <textarea id="script-input" class="script-textarea" placeholder="スプシからスクリプトをここに貼り付け...&#10;&#10;例：&#10;今日は肩のインナーマッスルについて解説します。&#10;まず最初に覚えてほしいのは、棘上筋の役割です。"></textarea>
+            <div class="setting-row">
+              <label for="max-chars">テロップ文字数上限</label>
+              <input type="number" id="max-chars" value="20" min="5" max="50" class="input-number">
+              <span>文字</span>
+            </div>
+            <button class="btn btn-primary" id="split-btn">テロップに分割 →</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Step 2: Caption Editor -->
+      <section class="step-panel" id="step-2">
+        <div class="card">
+          <div class="card-header">
+            <h2>✏️ テロップ編集</h2>
+            <span class="badge" id="caption-count">0テロップ</span>
+          </div>
+          <p class="card-description">テロップの文言や表示時間を調整できます。ドラッグで並び替えも可能です。</p>
+          <div id="caption-list" class="caption-list"></div>
+          <div class="caption-total" id="caption-total" style="display:none">
+            <span>合計時間: <strong id="total-duration-display">0.0s</strong></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Step 3: Images & Motion -->
+      <section class="step-panel" id="step-3">
+        <div class="card">
+          <div class="card-header">
+            <h2>🖼️ 画像＆モーション</h2>
+            <button class="btn btn-small btn-secondary" id="bulk-image-btn">一括アップロード</button>
+            <input type="file" id="bulk-image-input" accept="image/*" multiple hidden>
+          </div>
+          <p class="card-description">各テロップに表示する画像とモーション効果を設定します。</p>
+          <div id="image-editor" class="image-editor"></div>
+        </div>
+      </section>
+
+      <!-- Step 4: Preview & Export -->
+      <section class="step-panel" id="step-4">
+        <div class="preview-layout">
+          <div class="preview-container">
+            <div class="phone-frame">
+              <canvas id="preview-canvas" width="1080" height="1920"></canvas>
+            </div>
+            <div class="preview-controls">
+              <button class="btn btn-icon" id="preview-play-btn" title="再生">▶</button>
+              <div class="preview-time">
+                <span id="preview-current">0:00</span> / <span id="preview-total">0:00</span>
+              </div>
+              <div class="preview-progress">
+                <div class="progress-track" id="preview-progress-track">
+                  <div class="progress-fill" id="preview-progress-fill"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="export-panel">
+            <div class="card">
+              <h2>📤 エクスポート</h2>
+              <div class="export-options">
+                <div class="export-option">
+                  <h3>🎬 MP4動画</h3>
+                  <p>Instagram投稿可能な形式</p>
+                  <button class="btn btn-primary btn-lg" id="export-mp4-btn">MP4でダウンロード</button>
+                </div>
+                <div class="export-option">
+                  <h3>📄 SRT字幕</h3>
+                  <p>CapCutにインポート可能</p>
+                  <button class="btn btn-secondary btn-lg" id="export-srt-btn">SRTでダウンロード</button>
+                </div>
+              </div>
+              <div id="export-progress" class="export-progress" style="display:none">
+                <div class="progress-bar">
+                  <div class="progress-fill" id="export-progress-fill"></div>
+                </div>
+                <p class="progress-text" id="export-progress-text">準備中...</p>
+              </div>
+            </div>
+            <div class="card" id="export-settings-card">
+              <h2>⚙️ 出力設定</h2>
+              <div class="setting-row">
+                <label>解像度</label>
+                <select id="export-resolution" class="input-select">
+                  <option value="1080">1080 × 1920 (高画質)</option>
+                  <option value="720">720 × 1280 (標準)</option>
+                </select>
+              </div>
+              <div class="setting-row">
+                <label>テロップスタイル</label>
+                <select id="caption-style" class="input-select">
+                  <option value="bold-shadow">太字＋影</option>
+                  <option value="bg-box">背景ボックス</option>
+                  <option value="outline">白文字＋黒縁</option>
+                </select>
+              </div>
+              <div class="setting-row">
+                <label>テロップ位置</label>
+                <select id="caption-position" class="input-select">
+                  <option value="bottom">下部</option>
+                  <option value="center">中央</option>
+                  <option value="top">上部</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Navigation -->
+    <footer class="nav-footer">
+      <button class="btn btn-secondary" id="prev-btn" disabled>← 前へ</button>
+      <button class="btn btn-primary" id="next-btn">次へ →</button>
+    </footer>
+
+  </div>
+
+  <script src="https://unpkg.com/mp4-muxer@5.2.2/build/mp4-muxer.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
